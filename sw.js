@@ -1,9 +1,9 @@
-const CACHE = 'app-v2';
-const URLS = ['./', './index.html'];
+const CACHE = 'app-v5';
 
 self.addEventListener('install', e => {
+  self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(c => c.add('./'))
   );
 });
 
@@ -16,16 +16,17 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type === 'basic') {
+    // Network-first: always try fresh from network, cache only as offline fallback
+    fetch(e.request)
+      .then(res => {
+        if (res && res.status === 200) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return res;
-      }).catch(() => caches.match('./'));
-    })
+      })
+      .catch(() => caches.match(e.request))
   );
 });
