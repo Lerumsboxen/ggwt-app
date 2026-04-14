@@ -1085,9 +1085,7 @@
         <span class="home-btn-label">Movements</span>
         <span class="home-btn-sub">Exercise library</span>
       </button>
-      <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end; padding: 0 0.25rem 0.25rem;">
-        <button onclick="fetchDailyProgram()" style="background:#fbbf24;color:#000;font-family:'Barlow Condensed';font-size:0.95rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border:none;border-radius:4px;padding:0.5rem 1.2rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;">⟳ SYNC PROGRAM</button>
-      </div>
+
       </div>
     <div id="dash-content" class="hidden"></div>
   </div>
@@ -1754,7 +1752,7 @@ function json(obj) {
     localStorage.setItem('ggwt_app_version', '1');
   }
 })();
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v10';
 let state = JSON.parse(localStorage.getItem('lerums_state') || 'null') || {
   wods: [],
   prs: [],
@@ -1860,13 +1858,17 @@ const DASH_SECTIONS = {
       const today = new Date().toISOString().split('T')[0];
       // Use stored program date — admin can go to future, others capped at today
       if (!window.programViewDate) window.programViewDate = today;
-      if (!isAdmin() && window.programViewDate > today) window.programViewDate = today;
+      const cap7 = new Date(today); cap7.setDate(cap7.getDate() + 7);
+      const maxViewDate = cap7.toISOString().split('T')[0];
+      if (!isAdmin() && window.programViewDate > maxViewDate) window.programViewDate = maxViewDate;
       const viewDate = window.programViewDate;
       const prog = state.dailyProgram[viewDate];
       const isToday = viewDate === today;
       const isFuture = viewDate > today;
       const label = isToday ? 'Today' : formatDate(viewDate);
-      const nextDisabled = isAdmin() ? false : isToday;
+      const sevenDaysOut = new Date(today); sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+      const maxDate = sevenDaysOut.toISOString().split('T')[0];
+      const nextDisabled = isAdmin() ? false : (viewDate >= maxDate);
 
       const dateNav = `
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.85rem;">
@@ -1934,10 +1936,20 @@ const DASH_SECTIONS = {
         ? allSections.map(function(s, i){ return renderSectionCard(s, i, ''); }).join('')
         : noWorkoutHtml;
 
+      const week1StartVal = localStorage.getItem('ggwt_week1_start') || '';
+      const setupBar = '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.65rem;flex-wrap:wrap;">'
+        + '<label style="font-family:\'Barlow Condensed\';font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap;">Week 1 Start</label>'
+        + '<input type="date" id="dashWeek1Start" value="' + week1StartVal + '"'
+        + ' onchange="localStorage.setItem(\'ggwt_week1_start\',this.value);fetchDailyProgram(true)"'
+        + ' style="flex:1;padding:0.3rem 0.5rem;font-size:0.82rem;min-width:130px;background:var(--card2);border:1px solid var(--border);border-radius:3px;color:var(--text);">'
+        + '<button onclick="fetchDailyProgram(false)" style="background:#fbbf24;color:#000;font-family:\'Barlow Condensed\';font-size:0.75rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border:none;border-radius:3px;padding:0.35rem 0.75rem;cursor:pointer;white-space:nowrap;">⟳ Sync</button>'
+        + '</div>';
+
       const banner = '<div style="margin-bottom:1rem;">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">'
         + '<span style="font-family:\'Bebas Neue\';font-size:1rem;letter-spacing:0.08em;color:#fbbf24;">📅 Program</span>'
         + '</div>'
+        + setupBar
         + dateNav
         + sectionHtml
         + '</div>';
@@ -2436,8 +2448,10 @@ document.addEventListener('click', function(e) {
     if (dir === 'next') cur.setDate(cur.getDate() + 1);
     const y = cur.getFullYear(), m = String(cur.getMonth()+1).padStart(2,'0'), d = String(cur.getDate()).padStart(2,'0');
     const next = `${y}-${m}-${d}`;
-    // Admin can go to future, others are capped at today
-    window.programViewDate = (!isAdmin() && next > today) ? today : next;
+    // Admin can go to future, members can see up to 7 days ahead
+    const navCap = new Date(today); navCap.setDate(navCap.getDate() + 7);
+    const navMaxDate = navCap.toISOString().split('T')[0];
+    window.programViewDate = (!isAdmin() && next > navMaxDate) ? navMaxDate : next;
     if (currentDashSection === 'log') selectDashSection('log');
   }
 
@@ -4365,7 +4379,7 @@ function isAdmin() {
 }
 
 function applyAdminVisibility() {
-  // Sync header button — admin only (dashboard has SYNC PROGRAM for all)
+  // Sync header button — admin only
   const syncBtn = document.getElementById('headerSyncBtn');
   if (syncBtn) syncBtn.style.display = isAdmin() ? '' : 'none';
   // Sync tab in bottom nav — admin only
